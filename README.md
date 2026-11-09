@@ -45,6 +45,22 @@ VISION ends its report with `VERDICT: SHIP` or `VERDICT: REVISE (<agent>)`. On R
 
 To watch a revision without spending anything, pick **Mock with a revision (free)**. VISION sends the work back to JARVIS in round 1, JARVIS fixes it, and VISION ships in round 2.
 
+## Agent tools
+
+In Live mode some agents can use Anthropic's server-side tools:
+
+| Agent | Tool | What it does |
+|---|---|---|
+| FRIDAY | Web search | Checks the products it names against live search results (up to 4 searches, set `WEB_SEARCH_MAX_USES`) |
+| JARVIS, DUM-E | Code execution | Runs Python/shell in a sandbox hosted by Anthropic, with no internet and no access to your files or keys |
+
+- Nothing the model writes ever runs on your computer. The sandbox is Anthropic's.
+- Each report ends with an evidence block built from the tool results themselves: the searches made, the pages found, and every sandbox run with its exit code. Trust that block over the model's own words.
+- Web pages are untrusted. FRIDAY is told to treat results as data, not instructions, but this is a mitigation, not a guarantee.
+- Tools cost extra (searches and sandbox time are billed on top of tokens). Check Anthropic's pricing page. Set `AGENT_TOOLS=off` in `.env.local` to turn them all off.
+- If your account cannot use a tool, the agent re-runs without it and the report says so.
+- Mock mode shows scripted tool activity, marked `[mock]`.
+
 ## How it works
 
 ```
@@ -57,13 +73,14 @@ browser  --POST /api/run-->  route.js  -->  runPipeline()  (lib/orchestrator.js)
    +--> 3D city plays the same events one at a time (lib/city.js)
 ```
 
-Events: `run_start`, `agent_start`, `agent_done`, `handoff`, `revise`, `agent_error`, `run_end`.
+Events: `run_start`, `agent_start`, `tool_use`, `agent_done`, `handoff`, `revise`, `agent_error`, `run_end`.
 The city queues events, so a handoff walk always finishes before the next robot starts working.
 
 | File | What it does |
 |---|---|
 | `lib/agents.js` | The six agents: names, roles, models, system prompts, verdict parser |
 | `lib/orchestrator.js` | Runs the agents in order and yields events (mock or live) |
+| `lib/tools.js` | Which tools each agent gets, and reading tool results (sources, sandbox runs) |
 | `lib/mock.js` | Scripted reports for mock mode |
 | `app/api/run/route.js` | Streams the events to the browser |
 | `lib/city.js` | The three.js city and robot animation |
@@ -75,5 +92,5 @@ Live mode spends your API key on every run, and the `/api/run` route has no logi
 
 ## Not built yet
 
-- Agents cannot browse the web or write files. They only write reports. Giving them tools (web search for FRIDAY, a code sandbox for JARVIS and DUM-E) is the next step.
-- Live mode has not been run against the real API yet, because no key was available while building. Test it with a short brief first.
+- Agents cannot write project files; they still only write reports (running code is checked in the sandbox, but the code is not saved anywhere).
+- Live mode and the tools have not been run against the real API yet, because no key was available while building. They were tested against responses shaped like the API's. Try a short brief first and watch the first run's cost.

@@ -38,7 +38,8 @@ export default function Home() {
   const [reports, setReports] = useState({});
   const [models, setModels] = useState({});
   const [log, setLog] = useState([]);
-  const [usage, setUsage] = useState({ input: 0, output: 0 });
+  const [usage, setUsage] = useState({ input: 0, output: 0, searches: 0 });
+  const [toolCount, setToolCount] = useState({ search: 0, run: 0 });
   const [round, setRound] = useState(null);
   const [reportRound, setReportRound] = useState({});
   const [drawer, setDrawer] = useState(false);
@@ -106,13 +107,25 @@ export default function Home() {
         addLog(a.name, a.task, a.color);
         break;
       }
+      case 'tool_use': {
+        const a = agentById[ev.agent];
+        if (ev.tool === 'web_search') {
+          setToolCount((c) => ({ ...c, search: c.search + 1 }));
+          addLog(a.name, `searched the web: "${ev.query}"${ev.error ? ' (failed)' : ''}${ev.mock ? ' [mock]' : ''}`, a.color);
+        } else if (ev.tool === 'code_execution') {
+          setToolCount((c) => ({ ...c, run: c.run + 1 }));
+          const res = ev.error ? 'error' : ev.returnCode === 0 ? 'ok' : ev.returnCode === null ? 'no result' : 'failed, exit ' + ev.returnCode;
+          addLog(a.name, `ran code in the sandbox: ${ev.summary || ev.action} (${res})${ev.mock ? ' [mock]' : ''}`, a.color);
+        }
+        break;
+      }
       case 'agent_done': {
         const a = agentById[ev.agent];
         setStatus((s) => ({ ...s, [ev.agent]: 'done' }));
         setReports((r) => ({ ...r, [ev.agent]: ev.report }));
         setReportRound((r) => ({ ...r, [ev.agent]: ev.round }));
         if (ev.usage) {
-          setUsage((u) => ({ input: u.input + ev.usage.input, output: u.output + ev.usage.output }));
+          setUsage((u) => ({ input: u.input + ev.usage.input, output: u.output + ev.usage.output, searches: u.searches + (ev.usage.searches || 0) }));
         }
         addLog(a.name, 'finished its report', a.color);
         break;
@@ -158,7 +171,8 @@ export default function Home() {
     setReports({});
     setModels({});
     setLog([]);
-    setUsage({ input: 0, output: 0 });
+    setUsage({ input: 0, output: 0, searches: 0 });
+    setToolCount({ search: 0, run: 0 });
     setRound(null);
     setReportRound({});
     setError('');
@@ -312,6 +326,11 @@ export default function Home() {
                 Tokens: {usage.input.toLocaleString()} in · {usage.output.toLocaleString()} out
               </div>
             ) : null}
+            {toolCount.search + toolCount.run > 0 ? (
+              <div className="usage">
+                Tools: {toolCount.search} searches · {toolCount.run} sandbox runs
+              </div>
+            ) : null}
             <button type="button" className="btn" onClick={() => setDrawer(true)}>
               Reports
             </button>
@@ -336,6 +355,7 @@ export default function Home() {
           </div>
           <div className="report-meta">
             {activeAgent.role} · model: {models[active] || activeAgent.model}
+            {activeAgent.tools ? ' · tools: ' + activeAgent.tools.map((t) => (t === 'web_search' ? 'web search' : 'code sandbox')).join(', ') : ''}
             {reportRound[active] > 1 ? ` · revised in round ${reportRound[active]}` : ''}
           </div>
           <pre className="report">{reports[active] || 'No report yet. Run the pipeline to see what this agent writes.'}</pre>
